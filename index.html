@@ -321,10 +321,8 @@ body::before {
   width: 100%;
   max-width: 380px;
   aspect-ratio: 1;
-  display: grid;
-  gap: var(--gap);
+  display: block;
   border-radius: var(--radius);
-  overflow: hidden;
   touch-action: none;
   background: var(--bg);
   position: relative;
@@ -357,18 +355,35 @@ body::before {
 
 /* tiles */
 .tile {
-  position: relative;
+  position: absolute;
   overflow: hidden;
   cursor: pointer;
   border-radius: 4px;
-  transition: transform .1s ease;
   user-select: none;
   background: var(--surf2);
   touch-action: none;
+  transition:
+    top    .18s cubic-bezier(.25,.8,.25,1),
+    left   .18s cubic-bezier(.25,.8,.25,1),
+    box-shadow .15s ease;
+  will-change: top, left;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
 }
-.tile:not(.blank):active { transform: scale(.94); }
-.tile.blank { background: rgba(0,0,0,.6); cursor: default; }
-.tile.movable { outline: 2px solid rgba(232,255,90,.4); outline-offset: -2px; }
+.tile.moving {
+  box-shadow: 0 6px 18px rgba(0,0,0,.55);
+  z-index: 10;
+}
+.tile.blank {
+  background: rgba(0,0,0,.55);
+  cursor: default;
+  box-shadow: none;
+  transition: none;
+}
+.tile.movable {
+  outline: 2px solid rgba(232,255,90,.45);
+  outline-offset: -2px;
+  cursor: pointer;
+}
 .tile img {
   width: 100%; height: 100%;
   object-fit: cover;
@@ -385,11 +400,11 @@ body::before {
   text-shadow: 0 1px 3px rgba(0,0,0,.9);
   pointer-events: none;
 }
-.tile.shake { animation: shake .24s ease; }
+.tile.shake { animation: shake .26s ease; }
 @keyframes shake {
   0%,100% { transform: translateX(0); }
-  30%      { transform: translateX(-5px); }
-  70%      { transform: translateX(5px); }
+  25%      { transform: translateX(-6px) rotate(-1deg); }
+  75%      { transform: translateX(6px)  rotate(1deg); }
 }
 
 /* action buttons below board */
@@ -751,7 +766,7 @@ function startGame() {
 
 async function initPuzzle() {
   stopTimer();
-  G.moves = 0; G.seconds = 0; G.solved = false; G.slices = [];
+  G.moves = 0; G.seconds = 0; G.solved = false; G.slices = []; G._tileEls = [];
   updateStats();
 
   const board = document.getElementById('board');
@@ -834,14 +849,22 @@ function isMovable(pos) {
 /* ═══════════════════════════════════════════════════════
    RENDER
 ═══════════════════════════════════════════════════════ */
-function renderBoard() {
-  const board = document.getElementById('board');
-  const total = G.grid * G.grid;
-  board.innerHTML = '';
+/* ── Persistent-tile board: tiles stay in the DOM; we move them via top/left ── */
 
-  G.tiles.forEach((piece, pos) => {
+function buildBoard() {
+  const board = document.getElementById('board');
+  const n = G.grid, total = n * n;
+  board.innerHTML = '';
+  G._tileEls = [];   // indexed by piece index (not position)
+
+  // We size tiles via percentage of the board
+  const pct = 100 / n;
+
+  for (let piece = 0; piece < total; piece++) {
     const tile = document.createElement('div');
     tile.className = 'tile' + (piece === total - 1 ? ' blank' : '');
+    tile.style.width  = `calc(${pct}% - var(--gap) * ${n-1} / ${n})`;
+    tile.style.height = `calc(${pct}% - var(--gap) * ${n-1} / ${n})`;
 
     if (piece !== total - 1) {
       const img = document.createElement('img');
@@ -849,36 +872,88 @@ function renderBoard() {
       img.draggable = false;
       tile.appendChild(img);
 
-      if (G.showNums) {
-        const n = document.createElement('span');
-        n.className = 'tile-num';
-        n.textContent = piece + 1;
-        tile.appendChild(n);
-      }
-
-      if (isMovable(pos)) tile.classList.add('movable');
-
-      tile.addEventListener('click',      () => onTileClick(pos));
-      tile.addEventListener('touchstart', e  => { e.preventDefault(); onTileClick(pos); }, {passive: false});
+      const num = document.createElement('span');
+      num.className = 'tile-num';
+      num.textContent = piece + 1;
+      tile.appendChild(num);
     }
 
+    // click / touch by piece — we look up current pos at event time
+    tile.addEventListener('click', () => {
+      const pos = G.tiles.indexOf(piece);
+      onTileClick(pos, piece);
+    });
+    tile.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const pos = G.tiles.indexOf(piece);
+      onTileClick(pos, piece);
+    }, {passive: false});
+
     board.appendChild(tile);
-  });
+    G._tileEls[piece] = tile;
+  }
+
+  positionTiles(false);   // instant on first build
 }
 
-function onTileClick(pos) {
+function positionTiles(animate) {
+  const n = G.grid, total = n * n;
+  const gap = 3; // px — matches --gap CSS var
+  const board = document.getElementById('board');
+  const boardSize = board.clientWidth || 360;
+  const cellSize = (boardSize - gap * (n - 1)) / n;
+  const step = cellSize + gap;
+
+  G.tiles.forEach((piece, pos) => {
+    const el = G._tileEls[piece];
+    if (!el) return;
+    const row = Math.floor(pos / n);
+    const col = pos % n;
+    el.style.top  = (row * step) + 'px';
+    el.style.left = (col * step) + 'px';
+
+    // update classes
+    el.classList.toggle('blank',   piece === total - 1);
+    el.classList.toggle('movable', piece !== total - 1 && isMovable(pos));
+  });
+
+  // show/hide number labels
+  if (G._tileEls) {
+    G._tileEls.forEach((el, piece) => {
+      if (!el) return;
+      const num = el.querySelector('.tile-num');
+      if (num) num.style.display = G.showNums ? '' : 'none';
+    });
+  }
+}
+
+function renderBoard() {
+  if (!G._tileEls || G._tileEls.length !== G.grid * G.grid) {
+    buildBoard();
+  } else {
+    positionTiles(true);
+  }
+}
+
+function onTileClick(pos, piece) {
   if (G.solved) return;
   if (!isMovable(pos)) {
-    const el = document.getElementById('board').children[pos];
+    const el = G._tileEls[piece];
     el.classList.add('shake');
     el.addEventListener('animationend', () => el.classList.remove('shake'), {once: true});
     return;
   }
+
+  // Lift the moving tile visually
+  const movingEl = G._tileEls[piece];
+  movingEl.classList.add('moving');
+  movingEl.addEventListener('transitionend', () => movingEl.classList.remove('moving'), {once: true});
+
   swap(pos, G.blankPos);
   G.blankPos = pos;
   G.moves++;
   updateStats();
-  renderBoard();
+  positionTiles(true);
   checkWin();
 }
 
@@ -948,7 +1023,7 @@ function goSetup() {
 function toggleNums() {
   G.showNums = !G.showNums;
   document.getElementById('hint-btn').classList.toggle('on', G.showNums);
-  if (G.slices.length) renderBoard();
+  if (G.slices.length) positionTiles(false);
 }
 
 function showPreview()  { document.getElementById('ov-preview').classList.add('on'); }
