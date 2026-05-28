@@ -58,9 +58,9 @@ const IMAGES = {
   // Rename "custom" to whatever you like, e.g. "animals" or "space".
   // Update the label in index.html: search for data-cat="custom"
   // and change the displayed name there too.
-  custom: [
+//  custom: [
     // 'images/custom/my_photo_1.jpg',
     // 'images/custom/my_photo_2.jpg',
-  ],
+//  ],
 
 };
