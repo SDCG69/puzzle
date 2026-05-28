@@ -235,64 +235,6 @@ body::before {
 .start-btn:active { transform: scale(.97); background: #d6eb44; }
 .start-btn:disabled { opacity: .3; pointer-events: none; }
 
-/* upload section */
-.upload-zone {
-  border: 1.5px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all .18s;
-  position: relative;
-  overflow: hidden;
-}
-.upload-zone:hover, .upload-zone.drag {
-  border-color: var(--cyan);
-  background: rgba(90,240,232,.04);
-}
-.upload-zone input {
-  position: absolute; inset: 0;
-  opacity: 0; cursor: pointer;
-}
-.upload-icon { font-size: 1.8rem; margin-bottom: 6px; }
-.upload-zone p { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
-.upload-zone strong { color: var(--cyan); }
-
-.custom-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-.thumb-wrap { position: relative; display: inline-block; }
-.thumb-img {
-  width: 58px; height: 58px; border-radius: 8px;
-  object-fit: cover; border: 2px solid var(--border);
-  display: block;
-}
-.thumb-del {
-  position: absolute; top: -5px; right: -5px;
-  width: 18px; height: 18px; border-radius: 50%;
-  background: var(--danger); border: none;
-  color: #fff; font-size: 0.7rem; font-weight: 700;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  z-index: 2;
-}
-
-/* info note */
-.info-note {
-  background: var(--surf2);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--cyan);
-  border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 0.76rem;
-  color: var(--muted);
-  line-height: 1.6;
-}
-.info-note code {
-  background: rgba(90,240,232,.1);
-  color: var(--cyan);
-  border-radius: 3px;
-  padding: 1px 5px;
-  font-size: 0.72rem;
-}
 
 /* ═══════════════════════════════════════════════════════
    GAME SCREEN
@@ -587,28 +529,6 @@ body::before {
       </div>
     </div>
 
-    <!-- Upload your own for this session -->
-    <div class="section-block">
-      <div class="section-label">Add Your Own (this session)</div>
-      <div class="upload-zone" id="upload-zone">
-        <input type="file" accept="image/*" multiple id="file-input" onchange="handleUpload(event)">
-        <div class="upload-icon">📷</div>
-        <p><strong>Tap to choose photos</strong> or drag &amp; drop here</p>
-        <p>Images stay in your browser — not uploaded anywhere</p>
-      </div>
-      <div class="custom-thumbs" id="custom-thumbs"></div>
-    </div>
-
-    <!-- How to add permanent images -->
-    <div class="section-block">
-      <div class="section-label">Adding Images Permanently</div>
-      <div class="info-note">
-        Drop image files into the matching folder inside <code>images/</code>,
-        then add the path to the matching array in <code>images.js</code>.
-        Example: <code>'images/scenery/mountains.jpg'</code>
-      </div>
-    </div>
-
   </div><!-- /setup-body -->
 
   <button class="start-btn" id="start-btn" onclick="startGame()" disabled>START PUZZLE</button>
@@ -706,19 +626,11 @@ const G = {
   solved:     false,
 };
 
-// Session-uploaded images (data URLs from FileReader)
-const SESSION = [];
-
-/* ═══════════════════════════════════════════════════════
-   SETUP — build category cards from images.js manifest
-═══════════════════════════════════════════════════════ */
 const CAT_META = {
   scenery:      { label: 'Scenery',      icon: '🏔' },
   architecture: { label: 'Architecture', icon: '🏛' },
   cars:         { label: 'Cars',         icon: '🚗' },
   people:       { label: 'People',       icon: '👥' },
-  custom:       { label: 'Custom',       icon: '⭐' },
-  session:      { label: 'My Uploads',   icon: '📷' },
 };
 
 function buildCategoryCards() {
@@ -761,33 +673,6 @@ function buildCategoryCards() {
     grid.appendChild(card);
   });
 
-  // Session uploads card (shown only when photos have been uploaded)
-  rebuildSessionCard();
-}
-
-function rebuildSessionCard() {
-  let card = document.getElementById('cat-session');
-  if (SESSION.length === 0) {
-    if (card) card.remove();
-    return;
-  }
-  const grid = document.getElementById('cat-grid');
-  if (!card) {
-    card = document.createElement('div');
-    card.id = 'cat-session';
-    card.className = 'cat-card';
-    card.dataset.cat = 'session';
-    card.onclick = () => pickCategory(card);
-    grid.appendChild(card);
-  }
-  card.innerHTML = `
-    <img class="cat-thumb" src="${SESSION[0]}" alt="My Uploads" style="opacity:.7">
-    <div class="cat-overlay">
-      <div class="cat-name">My Uploads</div>
-      <div class="cat-count">${SESSION.length} image${SESSION.length !== 1 ? 's' : ''}</div>
-    </div>
-    <div class="cat-check">✓</div>`;
-  if (G.category === 'session') card.classList.add('sel');
 }
 
 function pickLevel(el) {
@@ -805,51 +690,10 @@ function pickCategory(card) {
 }
 
 function checkReady() {
-  const pool = G.category === 'session' ? SESSION : (IMAGES[G.category] || []);
+  const pool = IMAGES[G.category] || [];
   document.getElementById('start-btn').disabled = !(G.category && pool.length > 0);
 }
 
-/* ═══════════════════════════════════════════════════════
-   SESSION UPLOADS (drag & drop / file picker)
-═══════════════════════════════════════════════════════ */
-function handleUpload(e) {
-  Array.from(e.target.files).forEach(f => {
-    const r = new FileReader();
-    r.onload = ev => {
-      SESSION.push(ev.target.result);
-      renderSessionThumbs();
-      rebuildSessionCard();
-      checkReady();
-    };
-    r.readAsDataURL(f);
-  });
-  e.target.value = '';
-}
-
-function renderSessionThumbs() {
-  const wrap = document.getElementById('custom-thumbs');
-  wrap.innerHTML = '';
-  SESSION.forEach((src, i) => {
-    const tw = document.createElement('div');
-    tw.className = 'thumb-wrap';
-    const img = document.createElement('img');
-    img.className = 'thumb-img'; img.src = src; img.alt = '';
-    const del = document.createElement('button');
-    del.className = 'thumb-del'; del.textContent = '×';
-    del.onclick = () => { SESSION.splice(i,1); renderSessionThumbs(); rebuildSessionCard(); checkReady(); };
-    tw.append(img, del);
-    wrap.appendChild(tw);
-  });
-}
-
-const uz = document.getElementById('upload-zone');
-uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('drag'); });
-uz.addEventListener('dragleave', () => uz.classList.remove('drag'));
-uz.addEventListener('drop', e => {
-  e.preventDefault(); uz.classList.remove('drag');
-  if (e.dataTransfer.files.length)
-    handleUpload({ target: { files: e.dataTransfer.files }, value: '' });
-});
 
 /* ═══════════════════════════════════════════════════════
    IMAGE SLICING  (canvas → data URLs, no CORS issues)
@@ -892,7 +736,7 @@ function sliceImage(src, n) {
    GAME FLOW
 ═══════════════════════════════════════════════════════ */
 function pickImage() {
-  const pool = G.category === 'session' ? SESSION : IMAGES[G.category];
+  const pool = IMAGES[G.category];
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
