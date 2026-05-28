@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Slide &amp; Solve</title>
+<!--
+  ╔══════════════════════════════════════════════════════╗
+  ║  SLIDE & SOLVE — index.html                         ║
+  ║  Zero external dependencies. All images are local.  ║
+  ║  Edit images.js to add your own photos.             ║
+  ╚══════════════════════════════════════════════════════╝
+-->
+<style>
+/* ── RESET & TOKENS ───────────────────────────────────── */
+:root {
+  --bg:       #0c0c12;
+  --surf:     #14141e;
+  --surf2:    #1e1e2c;
+  --border:   #2c2c42;
+  --accent:   #e8ff5a;
+  --cyan:     #5af0e8;
+  --text:     #eff0f6;
+  --muted:    #686880;
+  --danger:   #ff5858;
+  --radius:   13px;
+  --gap:      3px;
+  /* heading font — Impact ships on every OS; feels condensed & punchy */
+  --font-head: Impact, 'Arial Narrow', Arial, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+*, *::before, *::after {
+  margin: 0; padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  display: flex;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+/* subtle radial glow top-left */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 10% 0%, rgba(232,255,90,.05) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(90,240,232,.04) 0%, transparent 55%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── APP SHELL ────────────────────────────────────────── */
+.app {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+  padding-bottom: 32px;
+}
+
+/* ── SCREENS ──────────────────────────────────────────── */
+.screen { display: none; flex-direction: column; flex: 1; }
+.screen.active { display: flex; }
+
+/* ═══════════════════════════════════════════════════════
+   SETUP SCREEN
+═══════════════════════════════════════════════════════ */
+.header {
+  padding: 22px 20px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-family: var(--font-head);
+  font-size: 2.1rem;
+  letter-spacing: 4px;
+  color: var(--accent);
+  line-height: 1;
+  text-shadow: 0 0 24px rgba(232,255,90,.35);
+  text-transform: uppercase;
+}
+.logo em { color: var(--cyan); font-style: normal; }
+
+.setup-body { padding: 0 20px; flex: 1; overflow-y: auto; }
+
+.section-block { margin-bottom: 26px; }
+
+.section-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 11px;
+}
+
+/* level pills */
+.pill-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.pill {
+  padding: 9px 20px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  background: var(--surf);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  user-select: none;
+}
+.pill:active  { transform: scale(.93); }
+.pill.sel {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(232,255,90,.08);
+}
+
+/* category cards */
+.cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.cat-card {
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  background: var(--surf);
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  aspect-ratio: 4/3;
+  transition: all .18s;
+  user-select: none;
+}
+.cat-card:active { transform: scale(.96); }
+.cat-card.sel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(232,255,90,.18);
+}
+.cat-card.disabled {
+  opacity: .35;
+  pointer-events: none;
+}
+
+.cat-thumb {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: .5;
+  transition: opacity .2s;
+  background: var(--surf2);  /* fallback while loading */
+}
+.cat-card.sel .cat-thumb { opacity: .82; }
+
+/* SVG placeholder shown when no images are configured for a category */
+.cat-thumb-placeholder {
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surf2);
+  font-size: 2rem;
+  opacity: .4;
+}
+
+.cat-overlay {
+  position: absolute; inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 10px 12px;
+  background: linear-gradient(0deg, rgba(0,0,0,.72) 0%, transparent 55%);
+}
+.cat-name {
+  font-family: var(--font-head);
+  font-size: 1.05rem;
+  letter-spacing: 2px;
+  color: #fff;
+  text-transform: uppercase;
+}
+.cat-card.sel .cat-name { color: var(--accent); }
+.cat-count {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,.5);
+  letter-spacing: 1px;
+  margin-top: 1px;
+}
+
+.cat-check {
+  position: absolute; top: 8px; right: 8px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  color: #000;
+  font-weight: 700;
+}
+.cat-card.sel .cat-check { display: flex; }
+
+/* start button */
+.start-btn {
+  margin: 10px 20px 0;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #0a0a0f;
+  border: none;
+  font-family: var(--font-head);
+  font-size: 1.35rem;
+  letter-spacing: 4px;
+  cursor: pointer;
+  transition: all .15s;
+  width: calc(100% - 40px);
+  text-transform: uppercase;
+}
+.start-btn:active { transform: scale(.97); background: #d6eb44; }
+.start-btn:disabled { opacity: .3; pointer-events: none; }
+
+/* upload section */
+.upload-zone {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .18s;
+  position: relative;
+  overflow: hidden;
+}
+.upload-zone:hover, .upload-zone.drag {
+  border-color: var(--cyan);
+  background: rgba(90,240,232,.04);
+}
+.upload-zone input {
+  position: absolute; inset: 0;
+  opacity: 0; cursor: pointer;
+}
+.upload-icon { font-size: 1.8rem; margin-bottom: 6px; }
+.upload-zone p { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+.upload-zone strong { color: var(--cyan); }
+
+.custom-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.thumb-wrap { position: relative; display: inline-block; }
+.thumb-img {
+  width: 58px; height: 58px; border-radius: 8px;
+  object-fit: cover; border: 2px solid var(--border);
+  display: block;
+}
+.thumb-del {
+  position: absolute; top: -5px; right: -5px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--danger); border: none;
+  color: #fff; font-size: 0.7rem; font-weight: 700;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2;
+}
+
+/* info note */
+.info-note {
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--cyan);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.info-note code {
+  background: rgba(90,240,232,.1);
+  color: var(--cyan);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 0.72rem;
+}
+
+/* ═══════════════════════════════════════════════════════
+   GAME SCREEN
+═══════════════════════════════════════════════════════ */
+.game-header {
+  padding: 14px 20px 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.back-btn {
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 1.1rem;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.back-btn:active { transform: scale(.9); }
+
+.game-title {
+  font-family: var(--font-head);
+  font-size: 1.05rem;
+  letter-spacing: 2.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hint-btn {
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  padding: 7px 11px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all .18s;
+  white-space: nowrap;
+}
+.hint-btn.on { color: var(--accent); border-color: rgba(232,255,90,.4); }
+
+/* stats bar */
+.stats-row {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+.stat-chip {
+  flex: 1;
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-lbl { font-size: 0.58rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.stat-val { font-family: var(--font-head); font-size: 1.45rem; letter-spacing: 1px; line-height: 1; color: var(--text); }
+.stat-val.y  { color: var(--accent); }
+.stat-val.tl { color: var(--cyan); }
+
+/* puzzle board */
+.puzzle-wrap {
+  padding: 0 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.puzzle-board {
+  width: 100%;
+  max-width: 380px;
+  aspect-ratio: 1;
+  display: grid;
+  gap: var(--gap);
+  border-radius: var(--radius);
+  overflow: hidden;
+  touch-action: none;
+  background: var(--bg);
+  position: relative;
+}
+.puzzle-board.g3 { grid-template-columns: repeat(3,1fr); }
+.puzzle-board.g4 { grid-template-columns: repeat(4,1fr); }
+
+/* loading / error state */
+.board-msg {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.5px;
+  padding: 40px 20px;
+  text-align: center;
+}
+.board-msg .spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* tiles */
+.tile {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: transform .1s ease;
+  user-select: none;
+  background: var(--surf2);
+  touch-action: none;
+}
+.tile:not(.blank):active { transform: scale(.94); }
+.tile.blank { background: rgba(0,0,0,.6); cursor: default; }
+.tile.movable { outline: 2px solid rgba(232,255,90,.4); outline-offset: -2px; }
+.tile img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.tile-num {
+  position: absolute;
+  bottom: 4px; right: 5px;
+  font-size: 0.52rem; font-weight: 800;
+  color: rgba(255,255,255,.55);
+  text-shadow: 0 1px 3px rgba(0,0,0,.9);
+  pointer-events: none;
+}
+.tile.shake { animation: shake .24s ease; }
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  30%      { transform: translateX(-5px); }
+  70%      { transform: translateX(5px); }
+}
+
+/* action buttons below board */
+.game-actions {
+  display: flex; gap: 8px;
+  padding: 12px 0 0;
+  max-width: 380px; width: 100%;
+}
+.act-btn {
+  flex: 1;
+  padding: 12px 6px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surf);
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.act-btn:active { transform: scale(.96); }
+.act-btn.hi {
+  background: rgba(232,255,90,.09);
+  border-color: rgba(232,255,90,.38);
+  color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════
+   OVERLAYS
+═══════════════════════════════════════════════════════ */
+.overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.86);
+  align-items: center; justify-content: center;
+  padding: 32px 20px;
+}
+.overlay.on { display: flex; }
+
+/* preview */
+.preview-box { position: relative; max-width: 340px; width: 100%; }
+.preview-box img { width: 100%; border-radius: var(--radius); display: block; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
+.preview-caption { text-align: center; margin-top: 12px; font-size: 0.76rem; color: var(--muted); }
+.preview-close {
+  position: absolute; top: -14px; right: -14px;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--surf2); border: 1px solid var(--border);
+  color: var(--text); font-size: 1.1rem;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+
+/* win card */
+.win-card {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px 24px 28px;
+  text-align: center;
+  max-width: 320px; width: 100%;
+  position: relative; overflow: hidden;
+}
+.win-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--cyan), var(--accent));
+}
+.win-emoji { font-size: 2.8rem; margin-bottom: 10px; }
+.win-title {
+  font-family: var(--font-head);
+  font-size: 2.2rem; letter-spacing: 5px;
+  color: var(--accent); margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.win-sub  { font-size: 0.82rem; color: var(--muted); margin-bottom: 22px; }
+.win-stats { display: flex; gap: 16px; justify-content: center; margin-bottom: 26px; }
+.win-stat { text-align: center; }
+.win-stat-val {
+  font-family: var(--font-head);
+  font-size: 2rem; letter-spacing: 1px;
+  color: var(--text); line-height: 1;
+}
+.win-stat-lbl { font-size: 0.62rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 3px; }
+.win-divider { width: 1px; background: var(--border); align-self: stretch; }
+.win-btns { display: flex; gap: 10px; }
+.win-btn {
+  flex: 1; padding: 13px;
+  border-radius: 10px;
+  font-size: 0.82rem; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+}
+.win-btn:active { transform: scale(.96); }
+.win-btn.out { background: transparent; border: 1.5px solid var(--border); color: var(--muted); }
+.win-btn.fill { background: var(--accent); border: none; color: #0a0a0f; }
+
+/* confetti */
+.cf {
+  position: fixed; border-radius: 2px;
+  pointer-events: none; z-index: 99;
+  animation: fall linear forwards;
+}
+@keyframes fall {
+  0%   { transform: translateY(0) rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(110vh) rotate(740deg); opacity: 0; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══════════════════════════════════════════════════════
+     SETUP SCREEN
+══════════════════════════════════════════════════════ -->
+<div class="screen active" id="scr-setup">
+  <div class="header">
+    <div class="logo">SLIDE<em>&amp;</em>SOLVE</div>
+  </div>
+
+  <div class="setup-body">
+
+    <!-- Level -->
+    <div class="section-block">
+      <div class="section-label">Difficulty</div>
+      <div class="pill-group">
+        <div class="pill sel" data-level="3" onclick="pickLevel(this)">3 × 3  Easy</div>
+        <div class="pill"     data-level="4" onclick="pickLevel(this)">4 × 4  Hard</div>
+      </div>
+    </div>
+
+    <!-- Categories (built from IMAGES in images.js) -->
+    <div class="section-block">
+      <div class="section-label">Category</div>
+      <div class="cat-grid" id="cat-grid">
+        <!-- populated by buildCategoryCards() -->
+      </div>
+    </div>
+
+    <!-- Upload your own for this session -->
+    <div class="section-block">
+      <div class="section-label">Add Your Own (this session)</div>
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" accept="image/*" multiple id="file-input" onchange="handleUpload(event)">
+        <div class="upload-icon">📷</div>
+        <p><strong>Tap to choose photos</strong> or drag &amp; drop here</p>
+        <p>Images stay in your browser — not uploaded anywhere</p>
+      </div>
+      <div class="custom-thumbs" id="custom-thumbs"></div>
+    </div>
+
+    <!-- How to add permanent images -->
+    <div class="section-block">
+      <div class="section-label">Adding Images Permanently</div>
+      <div class="info-note">
+        Drop image files into the matching folder inside <code>images/</code>,
+        then add the path to the matching array in <code>images.js</code>.
+        Example: <code>'images/scenery/mountains.jpg'</code>
+      </div>
+    </div>
+
+  </div><!-- /setup-body -->
+
+  <button class="start-btn" id="start-btn" onclick="startGame()" disabled>START PUZZLE</button>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     GAME SCREEN
+══════════════════════════════════════════════════════ -->
+<div class="screen" id="scr-game">
+  <div class="game-header">
+    <div class="back-btn" onclick="goSetup()">&#8592;</div>
+    <div class="game-title" id="game-title">Scenery · 3×3</div>
+    <div class="hint-btn" id="hint-btn" onclick="toggleNums()">123</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-chip">
+      <span class="stat-lbl">Moves</span>
+      <span class="stat-val y"  id="stat-moves">0</span>
+    </div>
+    <div class="stat-chip">
+      <span class="stat-lbl">Time</span>
+      <span class="stat-val tl" id="stat-time">0:00</span>
+    </div>
+    <div class="stat-chip">
+      <span class="stat-lbl">Best</span>
+      <span class="stat-val"    id="stat-best">—</span>
+    </div>
+  </div>
+
+  <div class="puzzle-wrap">
+    <div class="puzzle-board g3" id="board"></div>
+    <div class="game-actions">
+      <button class="act-btn"    onclick="showPreview()">&#128065; Preview</button>
+      <button class="act-btn"    onclick="reshuffle()">&#128256; Shuffle</button>
+      <button class="act-btn hi" onclick="nextImage()">&#128444; New Image</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<!-- Preview overlay -->
+<div class="overlay" id="ov-preview" onclick="hidePreview()">
+  <div class="preview-box" onclick="event.stopPropagation()">
+    <div class="preview-close" onclick="hidePreview()">&#215;</div>
+    <img id="preview-img" src="" alt="Full puzzle image">
+    <div class="preview-caption">Memorise it — then close and solve!</div>
+  </div>
+</div>
+
+<!-- Win overlay -->
+<div class="overlay" id="ov-win">
+  <div class="win-card">
+    <div class="win-emoji">&#127881;</div>
+    <div class="win-title">SOLVED!</div>
+    <div class="win-sub" id="win-sub">Excellent work</div>
+    <div class="win-stats">
+      <div class="win-stat">
+        <div class="win-stat-val" id="win-moves">—</div>
+        <div class="win-stat-lbl">Moves</div>
+      </div>
+      <div class="win-divider"></div>
+      <div class="win-stat">
+        <div class="win-stat-val" id="win-time">—</div>
+        <div class="win-stat-lbl">Time</div>
+      </div>
+    </div>
+    <div class="win-btns">
+      <button class="win-btn out"  onclick="winNewImage()">New Image</button>
+      <button class="win-btn fill" onclick="winPlayAgain()">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<!-- images.js must come first so IMAGES is defined before the game script -->
+<script src="images.js"></script>
+<script>
+'use strict';
+/* ═══════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════ */
+const G = {
+  grid:       3,
+  category:   null,
+  imageUrl:   null,
+  slices:     [],      // data: URLs for each tile piece
+  tiles:      [],      // tile[pos] = original piece index
+  blankPos:   0,
+  moves:      0,
+  seconds:    0,
+  timer:      null,
+  showNums:   false,
+  solved:     false,
+};
+
+// Session-uploaded images (data URLs from FileReader)
+const SESSION = [];
+
+/* ═══════════════════════════════════════════════════════
+   SETUP — build category cards from images.js manifest
+═══════════════════════════════════════════════════════ */
+const CAT_META = {
+  scenery:      { label: 'Scenery',      icon: '🏔' },
+  architecture: { label: 'Architecture', icon: '🏛' },
+  cars:         { label: 'Cars',         icon: '🚗' },
+  people:       { label: 'People',       icon: '👥' },
+  custom:       { label: 'Custom',       icon: '⭐' },
+  session:      { label: 'My Uploads',   icon: '📷' },
+};
+
+function buildCategoryCards() {
+  const grid = document.getElementById('cat-grid');
+  grid.innerHTML = '';
+
+  // Built-in categories from images.js
+  Object.keys(IMAGES).forEach(cat => {
+    const imgs = IMAGES[cat];
+    if (!imgs) return;
+    const meta = CAT_META[cat] || { label: cat, icon: '🖼' };
+    const count = imgs.length;
+    const disabled = count === 0;
+
+    const card = document.createElement('div');
+    card.className = 'cat-card' + (disabled ? ' disabled' : '');
+    card.dataset.cat = cat;
+    if (!disabled) card.onclick = () => pickCategory(card);
+
+    if (count > 0) {
+      const thumb = document.createElement('img');
+      thumb.className = 'cat-thumb';
+      thumb.src = imgs[0];
+      thumb.alt = meta.label;
+      card.appendChild(thumb);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'cat-thumb-placeholder';
+      ph.textContent = meta.icon;
+      card.appendChild(ph);
+    }
+
+    card.innerHTML += `
+      <div class="cat-overlay">
+        <div class="cat-name">${meta.label}</div>
+        <div class="cat-count">${count === 0 ? 'No images — add some to images.js' : count + ' image' + (count !== 1 ? 's' : '')}</div>
+      </div>
+      <div class="cat-check">✓</div>`;
+
+    grid.appendChild(card);
+  });
+
+  // Session uploads card (shown only when photos have been uploaded)
+  rebuildSessionCard();
+}
+
+function rebuildSessionCard() {
+  let card = document.getElementById('cat-session');
+  if (SESSION.length === 0) {
+    if (card) card.remove();
+    return;
+  }
+  const grid = document.getElementById('cat-grid');
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'cat-session';
+    card.className = 'cat-card';
+    card.dataset.cat = 'session';
+    card.onclick = () => pickCategory(card);
+    grid.appendChild(card);
+  }
+  card.innerHTML = `
+    <img class="cat-thumb" src="${SESSION[0]}" alt="My Uploads" style="opacity:.7">
+    <div class="cat-overlay">
+      <div class="cat-name">My Uploads</div>
+      <div class="cat-count">${SESSION.length} image${SESSION.length !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="cat-check">✓</div>`;
+  if (G.category === 'session') card.classList.add('sel');
+}
+
+function pickLevel(el) {
+  document.querySelectorAll('[data-level]').forEach(p => p.classList.remove('sel'));
+  el.classList.add('sel');
+  G.grid = parseInt(el.dataset.level);
+  checkReady();
+}
+
+function pickCategory(card) {
+  document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('sel'));
+  card.classList.add('sel');
+  G.category = card.dataset.cat;
+  checkReady();
+}
+
+function checkReady() {
+  const pool = G.category === 'session' ? SESSION : (IMAGES[G.category] || []);
+  document.getElementById('start-btn').disabled = !(G.category && pool.length > 0);
+}
+
+/* ═══════════════════════════════════════════════════════
+   SESSION UPLOADS (drag & drop / file picker)
+═══════════════════════════════════════════════════════ */
+function handleUpload(e) {
+  Array.from(e.target.files).forEach(f => {
+    const r = new FileReader();
+    r.onload = ev => {
+      SESSION.push(ev.target.result);
+      renderSessionThumbs();
+      rebuildSessionCard();
+      checkReady();
+    };
+    r.readAsDataURL(f);
+  });
+  e.target.value = '';
+}
+
+function renderSessionThumbs() {
+  const wrap = document.getElementById('custom-thumbs');
+  wrap.innerHTML = '';
+  SESSION.forEach((src, i) => {
+    const tw = document.createElement('div');
+    tw.className = 'thumb-wrap';
+    const img = document.createElement('img');
+    img.className = 'thumb-img'; img.src = src; img.alt = '';
+    const del = document.createElement('button');
+    del.className = 'thumb-del'; del.textContent = '×';
+    del.onclick = () => { SESSION.splice(i,1); renderSessionThumbs(); rebuildSessionCard(); checkReady(); };
+    tw.append(img, del);
+    wrap.appendChild(tw);
+  });
+}
+
+const uz = document.getElementById('upload-zone');
+uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('drag'); });
+uz.addEventListener('dragleave', () => uz.classList.remove('drag'));
+uz.addEventListener('drop', e => {
+  e.preventDefault(); uz.classList.remove('drag');
+  if (e.dataTransfer.files.length)
+    handleUpload({ target: { files: e.dataTransfer.files }, value: '' });
+});
+
+/* ═══════════════════════════════════════════════════════
+   IMAGE SLICING  (canvas → data URLs, no CORS issues)
+═══════════════════════════════════════════════════════ */
+function sliceImage(src, n) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+
+    img.onload = () => {
+      const TILE = 480;                   // px per tile on the canvas
+      // Crop to largest centred square
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      const ox   = (img.naturalWidth  - side) / 2;
+      const oy   = (img.naturalHeight - side) / 2;
+      const srcTile = side / n;
+      const pieces  = [];
+
+      for (let row = 0; row < n; row++) {
+        for (let col = 0; col < n; col++) {
+          const cv = document.createElement('canvas');
+          cv.width = cv.height = TILE;
+          cv.getContext('2d').drawImage(img,
+            ox + col * srcTile, oy + row * srcTile, srcTile, srcTile,
+            0, 0, TILE, TILE);
+          pieces.push(cv.toDataURL('image/jpeg', 0.88));
+        }
+      }
+      resolve(pieces);
+    };
+
+    img.onerror = () => reject(new Error('Image failed to load: ' + src));
+
+    // For same-origin files (images/ folder) this is fine.
+    // For session data: URLs there is no CORS at all.
+    img.src = src;
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   GAME FLOW
+═══════════════════════════════════════════════════════ */
+function pickImage() {
+  const pool = G.category === 'session' ? SESSION : IMAGES[G.category];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function startGame() {
+  G.imageUrl = pickImage();
+  const catLabel = (CAT_META[G.category] || {}).label || G.category;
+  document.getElementById('game-title').textContent = `${catLabel} · ${G.grid}×${G.grid}`;
+  document.getElementById('preview-img').src = G.imageUrl;
+  showScreen('game');
+  initPuzzle();
+}
+
+async function initPuzzle() {
+  stopTimer();
+  G.moves = 0; G.seconds = 0; G.solved = false; G.slices = [];
+  updateStats();
+
+  const board = document.getElementById('board');
+  board.className = `puzzle-board g${G.grid}`;
+  board.innerHTML = `<div class="board-msg"><div class="spinner"></div><span>Loading image…</span></div>`;
+
+  try {
+    G.slices = await sliceImage(G.imageUrl, G.grid);
+  } catch (err) {
+    board.innerHTML = `<div class="board-msg">
+      <span>⚠️ Could not load image</span>
+      <span style="font-size:.7rem">${err.message}</span>
+    </div>`;
+    return;
+  }
+
+  resetTiles();
+  doShuffle();
+  renderBoard();
+  startTimer();
+}
+
+function nextImage() {
+  G.imageUrl = pickImage();
+  document.getElementById('preview-img').src = G.imageUrl;
+  initPuzzle();
+}
+
+function reshuffle() {
+  stopTimer();
+  G.moves = 0; G.seconds = 0; G.solved = false;
+  updateStats();
+  resetTiles();
+  doShuffle();
+  renderBoard();
+  startTimer();
+}
+
+/* ═══════════════════════════════════════════════════════
+   TILE LOGIC
+═══════════════════════════════════════════════════════ */
+function resetTiles() {
+  const total = G.grid * G.grid;
+  G.tiles    = Array.from({length: total}, (_, i) => i);
+  G.blankPos = total - 1;
+}
+
+function doShuffle() {
+  const n = G.grid;
+  const moves = n === 3 ? 150 : 350;
+  let prev = -1;
+  for (let i = 0; i < moves; i++) {
+    const nb = neighbors(G.blankPos, n).filter(p => p !== prev);
+    const to = nb[Math.floor(Math.random() * nb.length)];
+    prev = G.blankPos;
+    swap(to, G.blankPos);
+    G.blankPos = to;
+  }
+}
+
+function swap(a, b) {
+  const t = G.tiles[a]; G.tiles[a] = G.tiles[b]; G.tiles[b] = t;
+}
+
+function neighbors(pos, n) {
+  const r = Math.floor(pos / n), c = pos % n, res = [];
+  if (r > 0)   res.push(pos - n);
+  if (r < n-1) res.push(pos + n);
+  if (c > 0)   res.push(pos - 1);
+  if (c < n-1) res.push(pos + 1);
+  return res;
+}
+
+function isMovable(pos) {
+  const n = G.grid, b = G.blankPos;
+  return (Math.floor(pos/n) === Math.floor(b/n) && Math.abs(pos%n - b%n) === 1) ||
+         (pos%n === b%n && Math.abs(Math.floor(pos/n) - Math.floor(b/n)) === 1);
+}
+
+/* ═══════════════════════════════════════════════════════
+   RENDER
+═══════════════════════════════════════════════════════ */
+function renderBoard() {
+  const board = document.getElementById('board');
+  const total = G.grid * G.grid;
+  board.innerHTML = '';
+
+  G.tiles.forEach((piece, pos) => {
+    const tile = document.createElement('div');
+    tile.className = 'tile' + (piece === total - 1 ? ' blank' : '');
+
+    if (piece !== total - 1) {
+      const img = document.createElement('img');
+      img.src = G.slices[piece];
+      img.draggable = false;
+      tile.appendChild(img);
+
+      if (G.showNums) {
+        const n = document.createElement('span');
+        n.className = 'tile-num';
+        n.textContent = piece + 1;
+        tile.appendChild(n);
+      }
+
+      if (isMovable(pos)) tile.classList.add('movable');
+
+      tile.addEventListener('click',      () => onTileClick(pos));
+      tile.addEventListener('touchstart', e  => { e.preventDefault(); onTileClick(pos); }, {passive: false});
+    }
+
+    board.appendChild(tile);
+  });
+}
+
+function onTileClick(pos) {
+  if (G.solved) return;
+  if (!isMovable(pos)) {
+    const el = document.getElementById('board').children[pos];
+    el.classList.add('shake');
+    el.addEventListener('animationend', () => el.classList.remove('shake'), {once: true});
+    return;
+  }
+  swap(pos, G.blankPos);
+  G.blankPos = pos;
+  G.moves++;
+  updateStats();
+  renderBoard();
+  checkWin();
+}
+
+/* ═══════════════════════════════════════════════════════
+   WIN
+═══════════════════════════════════════════════════════ */
+function checkWin() {
+  for (let i = 0; i < G.tiles.length; i++) {
+    if (G.tiles[i] !== i) return;
+  }
+  G.solved = true;
+  stopTimer();
+
+  const key = `best_${G.category}_${G.grid}`;
+  const prev = JSON.parse(localStorage.getItem(key) || 'null');
+  if (!prev || G.moves < prev.moves) {
+    localStorage.setItem(key, JSON.stringify({moves: G.moves, time: G.seconds}));
+    updateStats();
+  }
+
+  setTimeout(() => {
+    document.getElementById('win-moves').textContent = G.moves;
+    document.getElementById('win-time').textContent  = fmtTime(G.seconds);
+    const subs = ['Brilliant!', 'Excellent work!', 'You nailed it!', 'Superb!', 'Outstanding!', 'Incredible!'];
+    document.getElementById('win-sub').textContent = subs[Math.floor(Math.random() * subs.length)];
+    document.getElementById('ov-win').classList.add('on');
+    confetti();
+  }, 350);
+}
+
+function winNewImage()  { document.getElementById('ov-win').classList.remove('on'); nextImage(); }
+function winPlayAgain() { document.getElementById('ov-win').classList.remove('on'); reshuffle(); }
+
+/* ═══════════════════════════════════════════════════════
+   TIMER & STATS
+═══════════════════════════════════════════════════════ */
+function startTimer() {
+  stopTimer();
+  G.timer = setInterval(() => {
+    G.seconds++;
+    document.getElementById('stat-time').textContent = fmtTime(G.seconds);
+  }, 1000);
+}
+function stopTimer() { clearInterval(G.timer); G.timer = null; }
+function fmtTime(s)  { return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
+
+function updateStats() {
+  document.getElementById('stat-moves').textContent = G.moves;
+  document.getElementById('stat-time').textContent  = fmtTime(G.seconds);
+  const stored = JSON.parse(localStorage.getItem(`best_${G.category}_${G.grid}`) || 'null');
+  document.getElementById('stat-best').textContent  = stored ? stored.moves + 'm' : '—';
+}
+
+/* ═══════════════════════════════════════════════════════
+   UI HELPERS
+═══════════════════════════════════════════════════════ */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('scr-' + id).classList.add('active');
+}
+
+function goSetup() {
+  stopTimer();
+  showScreen('setup');
+}
+
+function toggleNums() {
+  G.showNums = !G.showNums;
+  document.getElementById('hint-btn').classList.toggle('on', G.showNums);
+  if (G.slices.length) renderBoard();
+}
+
+function showPreview()  { document.getElementById('ov-preview').classList.add('on'); }
+function hidePreview()  { document.getElementById('ov-preview').classList.remove('on'); }
+
+/* ═══════════════════════════════════════════════════════
+   CONFETTI
+═══════════════════════════════════════════════════════ */
+function confetti() {
+  const cols = ['#e8ff5a','#5af0e8','#ff5858','#fff','#ffa558','#a058ff'];
+  for (let i = 0; i < 65; i++) {
+    const el = document.createElement('div');
+    el.className = 'cf';
+    el.style.cssText = `
+      left:${Math.random()*100}vw;
+      top:-14px;
+      width:${6+Math.random()*7}px;
+      height:${8+Math.random()*9}px;
+      background:${cols[Math.floor(Math.random()*cols.length)]};
+      animation-duration:${1.4+Math.random()*2}s;
+      animation-delay:${Math.random()*.8}s;
+      transform:rotate(${Math.random()*360}deg);
+    `;
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════════════ */
+buildCategoryCards();
+</script>
+</body>
+</html>
